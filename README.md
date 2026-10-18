@@ -1,55 +1,126 @@
+<div align="center">
+
 # DBFLOW
 
-**A visual workspace for exploring database schemas, relationships, and records.**
+### Understand your database at a glance.
 
-DBFLOW is a local-first development project for PostgreSQL and MySQL. It includes a React workspace and a local API for schema inspection and guarded database operations.
+**A visual workspace for exploring database structure, relationships, and records—then making carefully reviewed changes from one connected view.**
 
-## Current implementation
+[Explore the project](https://github.com/mnm-0069/dbflow) · [Getting started](docs/GETTING_STARTED.md) · [Product and architecture](docs/PRODUCT_AND_ARCHITECTURE.md)
 
-- Connect to PostgreSQL or MySQL through a local API session. Credentials stay in API memory for up to 15 minutes of inactivity and are cleared from the form when it closes.
-- Inspect visible base tables, column types, primary keys, and foreign-key relationships in the schema canvas.
-- Browse live table records in pages of up to 100 rows, sort across the full table, search the loaded page, and edit non-key scalar values on tables with a primary key.
-- Create a table through a visual draft, review the generated engine-specific SQL, and explicitly confirm execution.
-- Review one constrained `ALTER TABLE … ADD COLUMN` operation from the SQL editor before execution.
-- Run a single read-only `SELECT` or read-only CTE in a read-only transaction. Results are capped at 1,000 rows and 2 MB.
-- Explore clearly labeled sample records and sample SQL results without sending the editor text to a database.
+![Status: early-stage project](https://img.shields.io/badge/status-early%20stage-5367E8)
+![Frontend: React and TypeScript](https://img.shields.io/badge/frontend-React%20%2B%20TypeScript-149ECA)
+![API: Node.js and Express](https://img.shields.io/badge/API-Node.js%20%2B%20Express-43853D)
+![Databases: PostgreSQL and MySQL](https://img.shields.io/badge/databases-PostgreSQL%20%7C%20MySQL-4169E1)
 
-Schema operations use a five-minute, one-use preview plan bound to the active database session. Successful operations trigger schema introspection. Row edits require the complete primary key, exclude primary-key and generated columns, use parameterized values, and compare the previous values to detect stale edits.
+</div>
 
-## Not implemented yet
+---
 
-- Arbitrary SQL execution, general-purpose DDL, destructive data changes, row insertion/deletion, and editing columns without a primary key.
-- Search across all rows; search currently applies only to the loaded page.
-- Query history, a functional filter builder or column chooser, live result export, guided lessons, and analytics dashboards.
-- Persistent connection profiles, hosted accounts, and production authentication or audit controls.
+## The idea
 
-The local API binds to `127.0.0.1` and rejects common cloud metadata and link-local targets. This is a local development foundation, not a production-secure arbitrary-host database service.
+Working with a database often means switching between a schema diagram, a query editor, and a separate table viewer. That makes it harder to see how a change relates to the data around it—and easier to lose track of what is live, what is only a draft, and what a command will do.
 
-## Requirements and setup
+**DBFLOW brings those parts into one visual workspace.** The long-term idea is a clear, approachable place where developers and learners can understand a database, explore its data, and make intentional changes while staying grounded in the database's actual state.
 
-- Node.js 20.19 or newer (the current environment uses Node 24).
-- npm 10 or newer.
-- PostgreSQL or MySQL for live database features; demo mode works without either.
+The project is being built around a simple principle:
+
+> **Make database work visible, connected, and reviewable.**
+
+## What DBFLOW is working toward
+
+- **See the structure.** Explore tables, columns, keys, and relationships on a schema canvas.
+- **Follow the data.** Move from a table in the schema to its records and inspect results in the same workspace.
+- **Understand a change before it happens.** Review supported schema changes and their generated SQL before confirming them.
+- **Keep the view honest.** After a successful schema change, read the database again so the canvas reflects its current state.
+- **Make it approachable.** Use a clearly labeled demo mode to explore the workspace without a database connection.
+
+## What works in this version
+
+| Area | Current capability |
+| --- | --- |
+| Database connections | Connect to PostgreSQL or MySQL through a local API session. |
+| Schema canvas | Inspect visible tables, columns, primary keys, and foreign-key relationships. |
+| Data explorer | Browse records in pages of up to 100 rows, sort across a table, search the loaded page, and edit eligible scalar values on tables with primary keys. |
+| Reviewed schema changes | Draft a table or one supported `ADD COLUMN` change, inspect the generated SQL, then explicitly confirm execution. |
+| SQL workspace | Run one read-only `SELECT` or read-only CTE, with bounded results. |
+| Demo mode | Explore sample records and results without sending editor text to a database. |
+
+**This is an early-stage project, and its current limits are part of the design story.** General-purpose SQL, arbitrary DDL, destructive data changes, row insertion and deletion, persistent connection profiles, and production accounts are not implemented. Search currently applies to the loaded page. See [Product and architecture](docs/PRODUCT_AND_ARCHITECTURE.md) for the full scope.
+
+## How it works
+
+The web app and local API are separate parts of the project. The web app presents the workspace; the API connects to a database, validates supported operations, and returns schema or record data.
+
+```mermaid
+flowchart LR
+    Person[Developer or learner] --> Workspace[DBFLOW workspace]
+    Workspace -->|inspect schema, browse records, review SQL| API[Local API]
+    API -->|PostgreSQL adapter| Postgres[(PostgreSQL)]
+    API -->|MySQL adapter| MySQL[(MySQL)]
+    Postgres -->|catalog and query results| API
+    MySQL -->|catalog and query results| API
+    API -->|current database state| Workspace
+    Workspace -->|draft and confirm supported change| API
+```
+
+For supported schema changes, DBFLOW follows a deliberate sequence: draft locally, validate on the API, show the normalized SQL, ask for confirmation, execute a short-lived one-use plan, and then inspect the database again.
+
+## Try it locally
+
+You can explore the demo without installing or configuring a database. Live features require a reachable PostgreSQL or MySQL instance.
+
+### Requirements
+
+- Node.js **20.19 or newer**
+- npm **10 or newer**
+
+### Start DBFLOW
 
 ```bash
+git clone https://github.com/mnm-0069/dbflow.git
+cd dbflow
 npm install
 npm run dev
 ```
 
-The API uses port `4000` and the web app uses port `5173` by default. Copy `apps/api/.env.example` to `apps/api/.env` only if you need to change the local API settings; the default configuration works without it.
+Then open [http://localhost:5173](http://localhost:5173). The local API health endpoint is [http://localhost:4000/api/health](http://localhost:4000/api/health).
 
-- Web: <http://localhost:5173>
-- API health: <http://localhost:4000/api/health>
+The default ports and settings work without an environment file. To adjust the API port or allowed web origin, copy `apps/api/.env.example` to `apps/api/.env` and edit the local values.
 
-Never commit `.env` files or database credentials. `.env.example` contains only local development defaults.
+For a guided live connection workflow, see [Getting started](docs/GETTING_STARTED.md).
 
-## Project structure
+## Built with
+
+- **Web:** React, TypeScript, Vite, React Flow, AG Grid Community, Monaco
+- **API:** Node.js, Express, TypeScript, Zod
+- **Database drivers:** PostgreSQL (`pg`) and MySQL (`mysql2`)
+- **Shared contracts:** TypeScript package in `packages/shared`
+
+## Safety and project scope
+
+DBFLOW is a **local development project**, not a hosted database service. Connection credentials are held in expiring API memory sessions; the API binds to loopback; live SQL is read-only and bounded; and the supported schema operations require a reviewed, one-use plan and explicit confirmation.
+
+These are useful guardrails for this prototype, not a claim of production security. The project does not yet provide production authentication, tenant isolation, audit controls, rate limiting, or complete hosted network egress protections. Use a least-privilege database account, and do not expose the local API as an unauthenticated network service.
+
+## Product direction
+
+The next stage is to make the core loop dependable before broadening the feature set:
+
+1. Improve the live data workflow with stable server-side sorting and filtering.
+2. Add focused interface coverage for connection errors, reviewed changes, schema refresh failures, and edit conflicts.
+3. Verify real-engine behavior using an isolated test database.
+4. Build learning and analytics experiences on top of the reliable schema-and-data foundation.
+
+These are areas of exploration, not promises that every item is already implemented. The detailed decisions and boundaries are documented in [Product and architecture](docs/PRODUCT_AND_ARCHITECTURE.md).
+
+## Project layout
 
 ```text
-apps/web         React + Vite + TypeScript workspace
-apps/api         Express API, database adapters, schema and record services
-packages/shared  Shared contracts
-docs             Setup and architecture notes
+apps/web         Visual workspace
+apps/api         Local API and database services
+packages/shared  Shared TypeScript contracts
+docs             Setup and product decisions
 ```
 
 ## Checks
@@ -62,4 +133,11 @@ npm run build
 
 GitHub Actions runs these checks on pushes to `main` and on pull requests.
 
-See [Getting started](docs/GETTING_STARTED.md) for connection and workflow details and [Product and architecture](docs/PRODUCT_AND_ARCHITECTURE.md) for current design boundaries.
+---
+
+<div align="center">
+
+**DBFLOW is an exploration of a more understandable way to work with databases:**
+see the structure, follow the data, and review the change.
+
+</div>
