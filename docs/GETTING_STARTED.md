@@ -47,6 +47,8 @@ The repository includes a disposable PostgreSQL database with sample customers, 
 
 The sample database port can be changed with `DBFLOW_POSTGRES_PORT=5434 npm run db:up`; enter the same port in the connection form. `npm run db:stop` stops the container while preserving its data. To remove the sample database and its stored volume, run `docker compose down --volumes` from the project root; this deletes all data in that local sample database.
 
+Open the web app as either `http://localhost:5173` or `http://127.0.0.1:5173`. If you set `WEB_ORIGIN` in `apps/api/.env`, make it match the address used in your browser.
+
 The sample password is for this loopback-only development setup. Do not reuse it for a real database or expose the container to a network.
 
 ## Connect a live database
