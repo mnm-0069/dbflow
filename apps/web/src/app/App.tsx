@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AgGridReact } from '@ag-grid-community/react';
 import { ModuleRegistry } from '@ag-grid-community/core';
 import { ClientSideRowModelModule } from '@ag-grid-community/client-side-row-model';
@@ -133,6 +133,8 @@ function App() {
   const [showEditRecord, setShowEditRecord] = useState(false);
   const [recordsBusy, setRecordsBusy] = useState(false);
   const [recordsError, setRecordsError] = useState('');
+  const recordsRequestId = useRef(0);
+  const requestedRecordsSearch = useRef('');
   const [toast, setToast] = useState('');
   const [nodes, setNodes] = useState(initialNodes);
   const [edges, setEdges] = useState(initialEdges);
@@ -184,7 +186,7 @@ function App() {
     cellClass: 'mono-cell',
   })) ?? [], [sqlResult]);
   const demoFilteredRows = sampleRows.filter((row) => Object.values(row).some((value) => String(value).toLowerCase().includes(searchText.toLowerCase())));
-  const liveFilteredRows = liveRecords?.rows.filter((row) => Object.values(row).some((value) => String(value ?? '').toLowerCase().includes(searchText.toLowerCase()))) ?? [];
+  const liveFilteredRows = liveRecords?.rows ?? [];
 
   const navItems: { key: Section; label: string; icon: any; group: string }[] = [
     { key: 'overview', label: 'Overview', icon: LayoutDashboard, group: 'WORKSPACE' },
@@ -420,8 +422,12 @@ function App() {
       setConnectionBusy(false);
     }
   };
-  const loadLiveRecords = async (schema: string, table: string, page: number, pageSize = 50, sort: LiveRecordSort | null = liveSort) => {
-    const requestedSort = liveRecords?.schema === schema && liveRecords.table === table ? sort : null;
+  const loadLiveRecords = async (schema: string, table: string, page: number, pageSize = 50, sort: LiveRecordSort | null = liveSort, search = searchText) => {
+    const sameTable = liveRecords?.schema === schema && liveRecords.table === table;
+    const requestedSort = sameTable ? sort : null;
+    const requestedSearch = sameTable ? search : '';
+    const requestId = ++recordsRequestId.current;
+    requestedRecordsSearch.current = requestedSearch;
     if (!liveConnectionId) {
       setRecordsError('The database session is unavailable. Test the connection again before browsing records.');
       setLiveSort(null);
@@ -431,7 +437,7 @@ function App() {
     }
     setRecordsBusy(true);
     setRecordsError('');
-    setSearchText('');
+    if (!sameTable) setSearchText('');
     setSelectedLiveRow(null);
     setLiveSort(requestedSort);
     setLiveRecords({ schema, table, page, pageSize, hasMore: false, rows: [] });
@@ -439,7 +445,7 @@ function App() {
       const response = await fetch('http://localhost:4000/api/connections/records', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ connectionId: liveConnectionId, schema, table, page, pageSize, ...(requestedSort ? { sort: requestedSort } : {}) }),
+        body: JSON.stringify({ connectionId: liveConnectionId, schema, table, page, pageSize, search: requestedSearch, ...(requestedSort ? { sort: requestedSort } : {}) }),
       });
       const payload = await response.json();
       if (!response.ok) {
@@ -449,15 +455,24 @@ function App() {
         }
         throw new Error(payload.error ?? 'Could not load this table page.');
       }
+      if (requestId !== recordsRequestId.current) return;
       setLiveRecords({ schema, table, ...payload } as LiveRecordsPage);
       setActiveTable(schemaTableId(schema, table));
       setSection('data');
     } catch (error) {
-      setRecordsError(error instanceof Error ? error.message : 'Could not load this table page.');
+      if (requestId === recordsRequestId.current) setRecordsError(error instanceof Error ? error.message : 'Could not load this table page.');
     } finally {
-      setRecordsBusy(false);
+      if (requestId === recordsRequestId.current) setRecordsBusy(false);
     }
   };
+  useEffect(() => {
+    if (section !== 'data' || !liveRecords || recordsBusy) return;
+    if (searchText === requestedRecordsSearch.current) return;
+    const timer = window.setTimeout(() => {
+      void loadLiveRecords(liveRecords.schema, liveRecords.table, 0, liveRecords.pageSize, liveSort, searchText);
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [searchText, recordsBusy]);
   const renderContent = () => {
     if (section === 'schema') return <>
       <div className="page-heading"><div><div className="eyebrow">DATABASE DESIGN</div><h1>Schema designer <span className="beta-tag">BETA</span></h1><p>{liveSchema ? `Browse and create tables in this ${liveSchema.engine === 'postgres' ? 'PostgreSQL' : 'MySQL'} database. Table creation requires SQL review and confirmation.` : 'See how your data connects. Drag tables around to make the structure your own.'}</p></div><div className="heading-actions"><button className="button button-quiet" onClick={() => setSection('sql')}><Code2 size={15}/> Open SQL workspace</button><button className="button button-primary" onClick={openTableDesigner}><Plus size={16}/> New table</button></div></div>
@@ -468,7 +483,7 @@ function App() {
     </>;
     if (section === 'data') return <>
       <div className="page-heading"><div><div className="eyebrow">{liveRecords ? 'LIVE TABLE' : 'EXPLORE YOUR DATA'}</div><h1>{liveRecords ? liveRecords.table : 'Data explorer'}</h1><p>{liveRecords ? `Records from ${liveRecords.schema}.${liveRecords.table}. Showing up to ${liveRecords.pageSize} rows per page.` : 'Inspect records in a familiar grid. This preview uses sample data, not a live database.'}</p></div><div className="heading-actions">{liveRecords ? <><span className="read-only-label"><LockKeyhole size={12}/> {liveSchema?.engine === 'mysql' ? 'MySQL' : 'PostgreSQL'} · {livePrimaryKeyColumns.length ? 'row updates enabled' : 'read only · no primary key'}</span><button className="button button-quiet" onClick={() => setSection('schema')}><GitBranch size={14}/> Back to schema</button></> : <span className="read-only-label"><Eye size={12}/> Demo data · read only</span>}</div></div>
-      <div className="data-toolbar"><div className="table-select"><Table2 size={15}/><strong>{liveRecords ? `${liveRecords.schema}.${liveRecords.table}` : activeTable}</strong></div><div className="search-box"><Search size={14}/><input type="search" name={liveRecords ? 'record-search' : 'sample-search'} autoComplete="off" aria-label={liveRecords ? 'Search records on this page' : 'Search sample records'} value={searchText} onChange={(e) => setSearchText(e.target.value)} placeholder={liveRecords ? 'Search this page…' : 'Search sample records…'}/></div>{liveRecords && <button className="button button-primary" onClick={() => setShowEditRecord(true)} disabled={!selectedLiveRow || !livePrimaryKeyColumns.length || recordsBusy}><Check size={14}/> Edit selected row</button>}</div>
+      <div className="data-toolbar"><div className="table-select"><Table2 size={15}/>{liveSchema && liveRecords ? <select aria-label="Select table to browse" value={schemaTableId(liveRecords.schema, liveRecords.table)} disabled={recordsBusy} onChange={(event) => { const table = liveSchema.tables.find((item) => schemaTableId(item.schema, item.name) === event.target.value); if (table) void loadLiveRecords(table.schema, table.name, 0); }}>{liveSchema.tables.map((table) => <option key={schemaTableId(table.schema, table.name)} value={schemaTableId(table.schema, table.name)}>{table.schema}.{table.name}</option>)}</select> : <strong>{liveRecords ? `${liveRecords.schema}.${liveRecords.table}` : activeTable}</strong>}</div><div className="search-box"><Search size={14}/><input type="search" name={liveRecords ? 'record-search' : 'sample-search'} autoComplete="off" maxLength={200} aria-label={liveRecords ? 'Search all records in this table' : 'Search sample records'} value={searchText} onChange={(e) => setSearchText(e.target.value)} placeholder={liveRecords ? 'Search all rows…' : 'Search sample records…'}/></div>{liveRecords && <button className="button button-primary" onClick={() => setShowEditRecord(true)} disabled={!selectedLiveRow || !livePrimaryKeyColumns.length || recordsBusy}><Check size={14}/> Edit selected row</button>}</div>
       {recordsError && liveRecords && <div className="record-alert" role="alert">{recordsError}</div>}
       {recordsBusy && liveRecords && <div className="record-loading" role="status" aria-live="polite">Loading records…</div>}
       <div className="grid-wrap"><div className="ag-theme-quartz custom-grid"><AgGridReact rowData={liveRecords ? liveFilteredRows : demoFilteredRows} columnDefs={(liveRecords ? liveColDefs : colDefs) as any} defaultColDef={{ sortable: true, resizable: true }} onSortChanged={(event) => {
@@ -477,8 +492,8 @@ function App() {
         const nextSort: LiveRecordSort | null = activeSort?.sort ? { column: activeSort.colId, direction: activeSort.sort } : null;
         if (JSON.stringify(nextSort) === JSON.stringify(liveSort)) return;
         void loadLiveRecords(liveRecords.schema, liveRecords.table, 0, liveRecords.pageSize, nextSort);
-      }} rowSelection={liveRecords ? { mode: 'singleRow', checkboxes: false, enableClickSelection: true } : undefined} getRowId={(params) => livePrimaryKeyColumns.length ? JSON.stringify(livePrimaryKeyColumns.map((column) => params.data[column.name])) : JSON.stringify(Object.values(params.data))} onSelectionChanged={(event) => setSelectedLiveRow(liveRecords ? event.api.getSelectedRows()[0] ?? null : null)} rowHeight={47} headerHeight={42} animateRows={!liveRecords} suppressCellFocus={true}/></div>{liveRecords?.rows.length === 0 && !recordsBusy && !recordsError && <div className="live-record-empty">This table has no rows.</div>}</div>
-      {liveRecords ? <div className="grid-footer live-grid-footer"><span>Page <strong>{liveRecords.page + 1}</strong> · {liveFilteredRows.length} of {liveRecords.rows.length} rows shown{liveSort ? ` · sorted by ${liveSort.column} ${liveSort.direction.toUpperCase()}` : ''}{searchText ? ' · search applies to this page only' : ''}</span><span className="pagination-controls"><label>Rows<select aria-label="Rows per page" value={liveRecords.pageSize} disabled={recordsBusy} onChange={(event) => void loadLiveRecords(liveRecords.schema, liveRecords.table, 0, Number(event.target.value))}><option value={10}>10</option><option value={25}>25</option><option value={50}>50</option><option value={100}>100</option></select></label><button className="button button-quiet" disabled={recordsBusy || liveRecords.page === 0} onClick={() => void loadLiveRecords(liveRecords.schema, liveRecords.table, liveRecords.page - 1, liveRecords.pageSize)}>Previous</button><button className="button button-quiet" disabled={recordsBusy || !liveRecords.hasMore} onClick={() => void loadLiveRecords(liveRecords.schema, liveRecords.table, liveRecords.page + 1, liveRecords.pageSize)}>Next</button></span></div> : <div className="grid-footer"><span>Showing <strong>{demoFilteredRows.length}</strong> sample records</span><span>Demo mode · Read only <span className="footer-dot"/></span></div>}
+      }} rowSelection={liveRecords ? { mode: 'singleRow', checkboxes: false, enableClickSelection: true } : undefined} getRowId={(params) => livePrimaryKeyColumns.length ? JSON.stringify(livePrimaryKeyColumns.map((column) => params.data[column.name])) : JSON.stringify(Object.values(params.data))} onSelectionChanged={(event) => setSelectedLiveRow(liveRecords ? event.api.getSelectedRows()[0] ?? null : null)} rowHeight={47} headerHeight={42} animateRows={!liveRecords} suppressCellFocus={true}/></div>{liveRecords?.rows.length === 0 && !recordsBusy && !recordsError && <div className="live-record-empty">{searchText ? 'No rows match your search.' : 'This table has no rows.'}</div>}</div>
+      {liveRecords ? <div className="grid-footer live-grid-footer"><span>Page <strong>{liveRecords.page + 1}</strong> · {liveRecords.rows.length} {searchText ? 'matching ' : ''}rows shown{liveSort ? ` · sorted by ${liveSort.column} ${liveSort.direction.toUpperCase()}` : ''}{searchText ? ' · search covers all table rows' : ''}</span><span className="pagination-controls"><label>Rows<select aria-label="Rows per page" value={liveRecords.pageSize} disabled={recordsBusy} onChange={(event) => void loadLiveRecords(liveRecords.schema, liveRecords.table, 0, Number(event.target.value))}><option value={10}>10</option><option value={25}>25</option><option value={50}>50</option><option value={100}>100</option></select></label><button className="button button-quiet" disabled={recordsBusy || liveRecords.page === 0} onClick={() => void loadLiveRecords(liveRecords.schema, liveRecords.table, liveRecords.page - 1, liveRecords.pageSize)}>Previous</button><button className="button button-quiet" disabled={recordsBusy || !liveRecords.hasMore} onClick={() => void loadLiveRecords(liveRecords.schema, liveRecords.table, liveRecords.page + 1, liveRecords.pageSize)}>Next</button></span></div> : <div className="grid-footer"><span>Showing <strong>{demoFilteredRows.length}</strong> sample records</span><span>Demo mode · Read only <span className="footer-dot"/></span></div>}
     </>;
     if (section === 'sql') return <>
       <div className="page-heading">

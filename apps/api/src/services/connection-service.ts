@@ -573,12 +573,22 @@ function pageOrder(sort: RecordPageSort | undefined, primaryKeys: string[], quot
   return order.length ? ` ORDER BY ${order.join(', ')}` : '';
 }
 
-export function buildPostgresPageQuery(schema: string, table: string, page: number, pageSize: number, sort?: RecordPageSort, primaryKeys: string[] = []) {
+function searchablePredicate(columns: string[], value: string, startIndex: number, quote: (identifier: string) => string, cast: (identifier: string) => string, placeholder: (index: number) => string) {
+  if (!value || columns.length === 0) return { sql: '', values: [] as string[] };
+  const escaped = value.replaceAll('!', '!!').replaceAll('%', '!%').replaceAll('_', '!_');
+  const parameter = placeholder(startIndex);
+  const sql = columns.map((column) => `${cast(quote(column))} ILIKE ${parameter} ESCAPE '!'`).join(' OR ');
+  return { sql: ` WHERE (${sql})`, values: [`%${escaped}%`] };
+}
+
+export function buildPostgresPageQuery(schema: string, table: string, page: number, pageSize: number, sort?: RecordPageSort, primaryKeys: string[] = [], search = '', columns: string[] = []) {
   if (!Number.isInteger(page) || page < 0 || page > 10_000) throw new RangeError('Page is outside the supported range.');
   if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100) throw new RangeError('Page size is outside the supported range.');
+  const predicate = searchablePredicate(columns, search, 1, quotePostgresIdentifier, (value) => `${value}::text`, (index) => `$${index}`);
+  const limitIndex = predicate.values.length + 1;
   return {
-    text: `SELECT * FROM ${quotePostgresIdentifier(schema)}.${quotePostgresIdentifier(table)}${pageOrder(sort, primaryKeys, quotePostgresIdentifier)} LIMIT $1 OFFSET $2`,
-    values: [pageSize + 1, page * pageSize],
+    text: `SELECT * FROM ${quotePostgresIdentifier(schema)}.${quotePostgresIdentifier(table)}${predicate.sql}${pageOrder(sort, primaryKeys, quotePostgresIdentifier)} LIMIT $${limitIndex} OFFSET $${limitIndex + 1}`,
+    values: [...predicate.values, pageSize + 1, page * pageSize],
   };
 }
 
@@ -586,17 +596,18 @@ function quoteMysqlIdentifier(identifier: string) {
   return `\`${identifier.replaceAll('`', '``')}\``;
 }
 
-export function buildMysqlPageQuery(schema: string, table: string, page: number, pageSize: number, sort?: RecordPageSort, primaryKeys: string[] = []) {
+export function buildMysqlPageQuery(schema: string, table: string, page: number, pageSize: number, sort?: RecordPageSort, primaryKeys: string[] = [], search = '', columns: string[] = []) {
   if (!Number.isInteger(page) || page < 0 || page > 10_000) throw new RangeError('Page is outside the supported range.');
   if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100) throw new RangeError('Page size is outside the supported range.');
+  const predicate = searchablePredicate(columns, search, 0, quoteMysqlIdentifier, (value) => `CAST(${value} AS CHAR)`, () => '?');
   return {
-    text: `SELECT * FROM ${quoteMysqlIdentifier(schema)}.${quoteMysqlIdentifier(table)}${pageOrder(sort, primaryKeys, quoteMysqlIdentifier)} LIMIT ? OFFSET ?`,
-    values: [pageSize + 1, page * pageSize],
+    text: `SELECT * FROM ${quoteMysqlIdentifier(schema)}.${quoteMysqlIdentifier(table)}${predicate.sql.replaceAll('ILIKE', 'LIKE')}${pageOrder(sort, primaryKeys, quoteMysqlIdentifier)} LIMIT ? OFFSET ?`,
+    values: [...predicate.values, pageSize + 1, page * pageSize],
   };
 }
 
 /** Reads at most 101 visible rows and safely quotes names confirmed through information_schema. */
-export async function readPostgresTablePage(session: PostgresSession, schema: string, table: string, page: number, pageSize: number, sort?: RecordPageSort) {
+export async function readPostgresTablePage(session: PostgresSession, schema: string, table: string, page: number, pageSize: number, sort?: RecordPageSort, search = '') {
   const client = await session.pool.connect();
   try {
     const metadata = await client.query<{ table_name: string; column_name: string | null }>(`
@@ -616,13 +627,17 @@ export async function readPostgresTablePage(session: PostgresSession, schema: st
     `, [schema, table]);
     if (metadata.rows.length === 0) throw new PostgresTableNotFoundError();
     const primaryKeys = metadata.rows.flatMap((row) => row.column_name ? [row.column_name] : []);
+    const columnResult = await client.query<{ column_name: string }>(
+      'SELECT column_name FROM information_schema.columns WHERE table_schema = $1 AND table_name = $2 ORDER BY ordinal_position', [schema, table],
+    );
+    const visibleColumns = columnResult.rows.map((row) => row.column_name);
     if (sort) {
       const columns = await client.query<{ column_name: string }>(
         'SELECT column_name FROM information_schema.columns WHERE table_schema = $1 AND table_name = $2 AND column_name = $3', [schema, table, sort.column],
       );
       if (columns.rows.length === 0) throw new RecordSortColumnError('Choose a visible column to sort this table.');
     }
-    const query = buildPostgresPageQuery(schema, table, page, pageSize, sort, primaryKeys);
+    const query = buildPostgresPageQuery(schema, table, page, pageSize, sort, primaryKeys, search, visibleColumns);
     const result = await client.query(query.text, query.values);
     const rows = result.rows.slice(0, pageSize);
     if (Buffer.byteLength(JSON.stringify(rows), 'utf8') > 2_000_000) throw new PostgresResultSizeError();
@@ -637,7 +652,7 @@ export async function readPostgresTablePage(session: PostgresSession, schema: st
   }
 }
 
-async function readMysqlTablePage(session: MysqlSession, schema: string, table: string, page: number, pageSize: number, sort?: RecordPageSort) {
+async function readMysqlTablePage(session: MysqlSession, schema: string, table: string, page: number, pageSize: number, sort?: RecordPageSort, search = '') {
   const [metadataRows] = await session.pool.query({ sql: `
     SELECT t.TABLE_NAME AS table_name, kcu.COLUMN_NAME AS column_name
     FROM information_schema.tables t
@@ -648,11 +663,13 @@ async function readMysqlTablePage(session: MysqlSession, schema: string, table: 
   `, timeout: 8000 }, [session.database, table]);
   if ((metadataRows as unknown[]).length === 0 || schema !== session.database) throw new PostgresTableNotFoundError();
   const primaryKeys = (metadataRows as Array<{ column_name: string | null }>).flatMap((row) => row.column_name ? [row.column_name] : []);
+  const [columnRows] = await session.pool.query({ sql: 'SELECT COLUMN_NAME AS column_name FROM information_schema.columns WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION', timeout: 8000 }, [schema, table]);
+  const visibleColumns = (columnRows as Array<{ column_name: string }>).map((row) => row.column_name);
   if (sort) {
     const [columnRows] = await session.pool.query({ sql: 'SELECT COLUMN_NAME AS column_name FROM information_schema.columns WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?', timeout: 8000 }, [schema, table, sort.column]);
     if (!(columnRows as unknown[]).length) throw new RecordSortColumnError('Choose a visible column to sort this table.');
   }
-  const query = buildMysqlPageQuery(schema, table, page, pageSize, sort, primaryKeys);
+  const query = buildMysqlPageQuery(schema, table, page, pageSize, sort, primaryKeys, search, visibleColumns);
   const [result] = await session.pool.query({ sql: query.text, timeout: 8000 }, query.values);
   const resultRows = result as Array<Record<string, unknown>>;
   const rows = resultRows.slice(0, pageSize);
@@ -660,9 +677,9 @@ async function readMysqlTablePage(session: MysqlSession, schema: string, table: 
   return { page, pageSize, hasMore: resultRows.length > pageSize, rows };
 }
 
-export async function readDatabaseTablePage(session: DatabaseSession, schema: string, table: string, page: number, pageSize: number, sort?: RecordPageSort) {
-  if (session.engine === 'postgres') return readPostgresTablePage(session, schema, table, page, pageSize, sort);
-  return readMysqlTablePage(session, schema, table, page, pageSize, sort);
+export async function readDatabaseTablePage(session: DatabaseSession, schema: string, table: string, page: number, pageSize: number, sort?: RecordPageSort, search = '') {
+  if (session.engine === 'postgres') return readPostgresTablePage(session, schema, table, page, pageSize, sort, search);
+  return readMysqlTablePage(session, schema, table, page, pageSize, sort, search);
 }
 
 export type DatabaseQueryResult = {

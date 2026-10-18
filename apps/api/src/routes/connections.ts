@@ -145,6 +145,7 @@ const recordsSchema = z.object({
   table: z.string().min(1).max(128),
   page: z.coerce.number().int().min(0).max(10_000).default(0),
   pageSize: z.coerce.number().int().min(1).max(100).default(50),
+  search: z.string().max(200).default(''),
   sort: z.object({ column: z.string().min(1).max(128), direction: z.enum(['asc', 'desc']) }).strict().optional(),
 }).strict();
 const readQuerySchema = z.object({
@@ -184,14 +185,14 @@ connectionsRouter.post('/records', async (req, res, next) => {
     res.status(400).json({ error: 'Invalid record page request', details: parsed.error.flatten().fieldErrors });
     return;
   }
-  const { connectionId, schema, table, page, pageSize, sort } = parsed.data;
+  const { connectionId, schema, table, page, pageSize, sort, search } = parsed.data;
   const session = getDatabaseSession(connectionId);
   if (!session) {
     res.status(410).json({ error: 'The database session expired. Test the connection again.' });
     return;
   }
   try {
-    res.json(await readDatabaseTablePage(session, schema, table, page, pageSize, sort));
+    res.json(await readDatabaseTablePage(session, schema, table, page, pageSize, sort, search));
   } catch (error) {
     if (error instanceof RecordSortColumnError) {
       res.status(400).json({ error: error.message });

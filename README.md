@@ -41,7 +41,7 @@ The project is being built around a simple principle:
 | --- | --- |
 | Database connections | Connect to PostgreSQL or MySQL through a local API session. |
 | Schema canvas | Inspect visible tables, columns, primary keys, and foreign-key relationships. |
-| Data explorer | Browse records in pages of up to 100 rows, sort across a table, search the loaded page, and edit eligible scalar values on tables with primary keys. |
+| Data explorer | Switch between connected tables, browse records in pages of up to 100 rows, sort across a table, search all rows and columns, and edit eligible scalar values on tables with primary keys. |
 | Reviewed schema changes | Draft a table or one supported `ADD COLUMN` change, inspect the generated SQL, then explicitly confirm execution. |
 | SQL workspace | Run one read-only `SELECT` or read-only CTE, with bounded results. |
 | Demo mode | Explore sample records and results without sending editor text to a database. |

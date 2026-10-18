@@ -88,6 +88,9 @@ button:focus-visible,input:focus-visible{outline-color:#2864c5}
 .connection-modal{max-height:calc(100dvh - 40px);overflow-y:auto;overscroll-behavior:contain}
 .connection-result.pending{color:#245bb5;background:#eef4ff;border-color:#dbe7f8}
 .live-grid-footer{height:auto;min-height:58px;gap:12px;flex-wrap:wrap;padding:9px 12px}
+.table-select select{max-width:min(32vw,360px);min-width:0;border:0;outline:0;background:transparent;color:#344054;font:600 13px 'DM Sans',sans-serif;text-overflow:ellipsis}
+.table-select select:disabled{color:#98a2b3}
+.table-select select:focus-visible{outline:2px solid #2864c5;outline-offset:3px;border-radius:3px}
 .pagination-controls{display:flex;align-items:center;gap:8px}
 .pagination-controls label{display:flex;align-items:center;gap:7px;color:#667085;font-size:12px}
 .pagination-controls select{height:34px;padding:0 8px;border:1px solid #d5dce7;border-radius:7px;background:#fff;color:#344054}
