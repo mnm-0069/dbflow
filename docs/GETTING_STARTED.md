@@ -64,11 +64,12 @@ The connection form sends credentials to the local API. The API holds them only 
 
 - Schema introspection reads visible base tables, columns, types, primary keys, and foreign keys for PostgreSQL and MySQL.
 - The data explorer can switch between visible tables, page through at most 100 rows at a time, sort across a table, and search all visible columns across the full table. Search is case-insensitive and treats `%` and `_` as literal characters. **Edit selected row** is available only when the table has a primary key. The editor excludes primary-key and generated columns, accepts scalar values and `NULL` where allowed, and detects stale rows before saving.
+- **Add row** reviews scalar field values before inserting. Database-generated identity and default values are left to the database. **Delete row** is available for tables with a primary key; DBFLOW previews the selected row and checks it has not changed before deletion. Both operations require explicit confirmation and refresh the live records after success. These are single-row operations; bulk changes are not supported.
 - **New table** creates a draft using the supported types (integer, bigint, varchar, text, boolean, timestamp, and decimal). The API validates names and constraints, generates SQL, and returns a session-bound one-use preview that expires after five minutes. Execution requires checking the review confirmation. The schema is then re-introspected; if the new table is not visible or refresh fails, the UI reports that separately.
 - In the SQL workspace, live queries allow one read-only `SELECT` or read-only CTE. The API runs it in a read-only transaction, caps results at 1,000 rows / 2 MB, and applies an eight-second query timeout.
 - **Review schema change** accepts one constrained `ALTER TABLE … ADD COLUMN` statement with a supported type and optional `NULL` / `NOT NULL` modifier. The API normalizes identifiers and SQL, checks that the target and column are appropriate, and requires the same review and confirmation flow. The schema is refreshed after execution.
 
-Other DDL, arbitrary SQL, destructive DML, row insertion/deletion, general-purpose filtering, and live export are not supported yet. MySQL DDL may commit implicitly according to MySQL behavior.
+Other DDL, arbitrary SQL, bulk data changes, general-purpose filtering, and live export are not supported yet. MySQL DDL may commit implicitly according to MySQL behavior.
 
 ## Checks
 

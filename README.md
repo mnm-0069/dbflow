@@ -41,12 +41,12 @@ The project is being built around a simple principle:
 | --- | --- |
 | Database connections | Connect to PostgreSQL or MySQL through a local API session. |
 | Schema canvas | Inspect visible tables, columns, primary keys, and foreign-key relationships. |
-| Data explorer | Switch between connected tables, browse records in pages of up to 100 rows, sort across a table, search all rows and columns, and edit eligible scalar values on tables with primary keys. |
+| Data explorer | Switch between connected tables, browse records in pages of up to 100 rows, sort across a table, search all rows and columns, edit eligible scalar values, and insert or delete rows through reviewed flows. |
 | Reviewed schema changes | Draft a table or one supported `ADD COLUMN` change, inspect the generated SQL, then explicitly confirm execution. |
 | SQL workspace | Run one read-only `SELECT` or read-only CTE, with bounded results. |
 | Demo mode | Explore sample records and results without sending editor text to a database. |
 
-**This is an early-stage project, and its current limits are part of the design story.** General-purpose SQL, arbitrary DDL, destructive data changes, row insertion and deletion, persistent connection profiles, and production accounts are not implemented. Search currently applies to the loaded page. See [Product and architecture](docs/PRODUCT_AND_ARCHITECTURE.md) for the full scope.
+**This is an early-stage project, and its current limits are part of the design story.** General-purpose SQL, arbitrary DDL, bulk/destructive data changes, persistent connection profiles, and production accounts are not implemented. Row insertion and deletion are explicit single-row operations with review and confirmation; delete requires a primary key and verifies that the row has not changed. See [Product and architecture](docs/PRODUCT_AND_ARCHITECTURE.md) for the full scope.
 
 ## How it works
 
@@ -64,7 +64,7 @@ flowchart LR
     Workspace -->|draft and confirm supported change| API
 ```
 
-For supported schema changes, DBFLOW follows a deliberate sequence: draft locally, validate on the API, show the normalized SQL, ask for confirmation, execute a short-lived one-use plan, and then inspect the database again.
+For supported schema and row changes, DBFLOW follows a deliberate sequence: prepare the operation, validate it on the API, show what will happen, ask for confirmation, execute a short-lived one-use plan, and refresh the workspace from the database.
 
 ## Try it locally
 
@@ -120,10 +120,9 @@ These are useful guardrails for this prototype, not a claim of production securi
 
 The next stage is to make the core loop dependable before broadening the feature set:
 
-1. Improve the live data workflow with stable server-side sorting and filtering.
-2. Add focused interface coverage for connection errors, reviewed changes, schema refresh failures, and edit conflicts.
-3. Verify real-engine behavior using an isolated test database.
-4. Build learning and analytics experiences on top of the reliable schema-and-data foundation.
+1. Improve the live data workflow with stable server-side filtering and focused coverage for connection errors, reviewed changes, schema refresh failures, and edit conflicts.
+2. Expand repeatable database-backed verification in an explicitly isolated test database, including MySQL behavior.
+3. Build learning and analytics experiences on top of the reliable schema-and-data foundation.
 
 These are areas of exploration, not promises that every item is already implemented. The detailed decisions and boundaries are documented in [Product and architecture](docs/PRODUCT_AND_ARCHITECTURE.md).
 

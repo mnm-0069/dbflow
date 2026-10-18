@@ -101,6 +101,33 @@ button:focus-visible,input:focus-visible{outline-color:#2864c5}
 .grid-wrap{position:relative}
 .live-record-empty{position:absolute;inset:42px 0 0;display:grid;place-items:center;background:#ffffffd9;color:#667085;font-size:13px;pointer-events:none}
 .create-table-modal{width:min(100%,900px);padding:26px;}
+.insert-record-modal{width:min(100%,820px);padding:26px}
+.delete-record-modal{width:min(100%,680px);padding:26px}
+.record-actions{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.record-actions .button{padding:9px 11px}
+.button-danger,.button-danger-quiet{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid #f0c4c1;border-radius:8px;padding:11px 16px;background:#fff;color:#b42318;font-size:13px;font-weight:600;box-shadow:0 1px 2px #10182808}
+.button-danger:hover,.button-danger-quiet:hover{background:#fff5f4;border-color:#d9938d}
+.button-danger:disabled,.button-danger-quiet:disabled{cursor:not-allowed;opacity:.52}
+.button-danger-quiet{padding:11px 13px;background:#fff}
+.insert-record-fields{display:flex;flex-direction:column;gap:5px;max-height:min(42dvh,350px);overflow-y:auto;padding-right:3px;margin:8px 0 12px}
+.insert-record-field{display:flex;align-items:end;gap:12px;border-bottom:1px solid #edf0f4;padding:8px 2px}
+.insert-field-value{display:flex;flex:1;min-width:0;flex-direction:column;gap:5px;color:#344054;font-size:12px;font-weight:600}
+.insert-field-value>span{display:flex;align-items:baseline;gap:8px}
+.insert-field-value small{color:#7b8798;font-size:10px;font-weight:400}
+.insert-field-value input{height:37px;min-width:0;border:1px solid #d5dce7;border-radius:7px;background:#fff;color:#202938;padding:0 10px;font:12px 'DM Mono',monospace}
+.insert-field-value input:disabled{background:#f3f5f8;color:#98a2b3}
+.insert-field-include{display:flex;align-items:center;gap:6px;min-height:37px;white-space:nowrap;color:#475467;font-size:11px}
+.insert-field-include input{accent-color:#2864c5}
+.record-mutation-note{border:1px solid #dbe7f8;border-radius:8px;background:#f5f8fd;padding:10px 12px;color:#526174;font-size:12px;line-height:1.55;margin:12px 0}
+.record-review-preview{display:flex;flex-direction:column;gap:7px;max-height:min(36dvh,300px);overflow-y:auto;border:1px solid #dbe3ee;border-radius:9px;background:#f8fafc;padding:12px;margin:12px 0;color:#475467;font-size:12px}
+.record-review-preview>div{display:flex;justify-content:space-between;gap:10px;margin-bottom:2px;color:#344054}
+.record-review-preview>div span,.record-review-preview small{color:#667085;font-size:11px}
+.record-review-preview code,.delete-record-key code{font:11px 'DM Mono',monospace;color:#245bb5;margin-right:6px}
+.delete-record-key{display:flex;align-items:center;flex-wrap:wrap;gap:8px 14px;border:1px solid #f1d3d1;border-radius:8px;background:#fff8f7;padding:10px 12px;margin-bottom:12px;color:#475467;font-size:12px}
+.delete-record-key strong{color:#344054}
+.delete-record-icon{width:44px;height:44px;border-radius:10px;display:grid;place-items:center;color:#b42318;background:#fff1f0;border:1px solid #f2d0cc}
+@media(max-width:980px){.data-toolbar{flex-wrap:wrap}.record-actions{margin-left:auto}.data-toolbar .search-box{order:3;max-width:none;flex-basis:100%;margin:0}}
+@media(max-width:560px){.record-actions{width:100%;justify-content:flex-end}.record-actions .button{flex:1;padding:9px 6px;font-size:11px}.insert-record-modal,.delete-record-modal{padding:20px}.insert-record-field{align-items:stretch;flex-wrap:wrap}.insert-field-value{flex-basis:100%}.insert-field-include{min-height:28px}}
 .ddl-review-modal{width:min(100%,700px);padding:26px;}
 .edit-record-modal{width:min(100%,820px);padding:26px}
 .edit-record-modal h2{margin:18px 0 5px}

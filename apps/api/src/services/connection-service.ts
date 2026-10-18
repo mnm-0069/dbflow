@@ -12,7 +12,7 @@ export type ConnectionInput = {
 export type PostgresSchemaTable = {
   schema: string;
   name: string;
-  columns: Array<{ name: string; type: string; key?: 'pk' | 'fk' | 'pk-fk'; generated?: boolean }>;
+  columns: Array<{ name: string; type: string; key?: 'pk' | 'fk' | 'pk-fk'; generated?: boolean; identity?: boolean; hasDefault?: boolean; nullable?: boolean }>;
   foreignKeys: Array<{
     column: string;
     referencedSchema: string;
@@ -27,6 +27,8 @@ type ColumnMetadataRow = {
   character_maximum_length: number | null; numeric_precision: number | null; numeric_scale: number | null;
   is_generated?: string;
   is_nullable?: string;
+  is_identity?: string;
+  has_default?: boolean;
 };
 type PrimaryKeyMetadataRow = { table_schema: string; table_name: string; column_name: string };
 type ForeignKeyMetadataRow = {
@@ -60,7 +62,7 @@ export function assemblePostgresSchema(
   for (const row of columnRows) {
     const key = tableKey(row.table_schema, row.table_name);
     const table = tables.get(key) ?? { schema: row.table_schema, name: row.table_name, columns: [], foreignKeys: [] };
-    table.columns.push({ name: row.column_name, type: formatType(row), ...(row.is_generated === 'ALWAYS' ? { generated: true } : {}), ...(row.is_nullable ? { nullable: row.is_nullable === 'YES' } : {}) });
+    table.columns.push({ name: row.column_name, type: formatType(row), ...(row.is_generated === 'ALWAYS' ? { generated: true } : {}), ...(row.is_nullable ? { nullable: row.is_nullable === 'YES' } : {}), ...(row.is_identity === 'YES' ? { identity: true } : {}), ...(row.has_default ? { hasDefault: true } : {}) });
     tables.set(key, table);
   }
   for (const row of primaryKeyRows) {
@@ -398,11 +400,13 @@ export async function introspectPostgresSchema(session: PostgresSession) {
   const client = await session.pool.connect();
   try {
     const version = await client.query<{ server_version_num: string }>('SHOW server_version_num');
-    const generatedColumn = Number(version.rows[0]?.server_version_num) >= 120000 ? 'c.is_generated' : "'NEVER'::text AS is_generated";
+    const versionNumber = Number(version.rows[0]?.server_version_num);
+    const generatedColumn = versionNumber >= 120000 ? 'c.is_generated' : "'NEVER'::text AS is_generated";
+    const identityColumn = versionNumber >= 100000 ? 'c.is_identity' : "'NO'::text AS is_identity";
     const [columnResult, primaryKeyResult, foreignKeyResult] = await Promise.all([
       client.query<ColumnMetadataRow>(`
         SELECT c.table_schema, c.table_name, c.column_name, c.data_type, c.udt_schema, c.udt_name,
-               c.character_maximum_length, c.numeric_precision, c.numeric_scale, ${generatedColumn}, c.is_nullable
+               c.character_maximum_length, c.numeric_precision, c.numeric_scale, ${generatedColumn}, ${identityColumn}, c.column_default IS NOT NULL AS has_default, c.is_nullable
         FROM information_schema.columns c
         JOIN information_schema.tables t
           ON t.table_schema = c.table_schema AND t.table_name = c.table_name
@@ -473,7 +477,7 @@ export async function introspectPostgresSchema(session: PostgresSession) {
   }
 }
 
-type MysqlColumnMetadataRow = { table_schema: string; table_name: string; column_name: string; column_type: string; is_generated?: string; is_nullable?: string };
+type MysqlColumnMetadataRow = { table_schema: string; table_name: string; column_name: string; column_type: string; is_generated?: string; is_nullable?: string; column_default?: unknown; extra?: string };
 type MysqlPrimaryKeyMetadataRow = { table_schema: string; table_name: string; column_name: string };
 type MysqlForeignKeyMetadataRow = {
   table_schema: string; table_name: string; column_name: string;
@@ -490,7 +494,7 @@ export function assembleMysqlSchema(
   for (const row of columnRows) {
     const key = tableKey(row.table_schema, row.table_name);
     const table = tables.get(key) ?? { schema: row.table_schema, name: row.table_name, columns: [], foreignKeys: [] };
-    table.columns.push({ name: row.column_name, type: row.column_type, ...(row.is_generated === 'ALWAYS' ? { generated: true } : {}), ...(row.is_nullable ? { nullable: row.is_nullable === 'YES' } : {}) });
+    table.columns.push({ name: row.column_name, type: row.column_type, ...(row.is_generated === 'ALWAYS' ? { generated: true } : {}), ...(row.is_nullable ? { nullable: row.is_nullable === 'YES' } : {}), ...(row.column_default !== null && row.column_default !== undefined ? { hasDefault: true } : {}), ...(/auto_increment/i.test(row.extra ?? '') ? { identity: true } : {}) });
     tables.set(key, table);
   }
   for (const row of primaryKeyRows) {
@@ -514,7 +518,7 @@ export function assembleMysqlSchema(
 async function introspectMysqlSchema(session: MysqlSession) {
   const [columnRows, primaryKeyRows, foreignKeyRows] = await Promise.all([
     session.pool.query({ sql: `
-      SELECT c.table_schema, c.table_name, c.column_name, c.column_type, c.is_generated, c.is_nullable
+      SELECT c.table_schema, c.table_name, c.column_name, c.column_type, c.is_generated, c.is_nullable, c.column_default, c.extra
       FROM information_schema.columns c
       JOIN information_schema.tables t
         ON t.table_schema = c.table_schema AND t.table_name = c.table_name
