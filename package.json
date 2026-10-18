@@ -7,6 +7,9 @@
     "dev": "concurrently -n API,WEB -c blue,green \"npm run dev:api\" \"npm run dev:web\"",
     "dev:web": "npm --workspace @idp/web run dev",
     "dev:api": "npm --workspace @idp/api run dev",
+    "db:up": "docker compose up -d postgres",
+    "db:stop": "docker compose stop postgres",
+    "db:logs": "docker compose logs -f postgres",
     "build": "npm --workspace @idp/web run build && npm --workspace @idp/api run build",
     "typecheck": "npm --workspace @idp/web run typecheck && npm --workspace @idp/api run typecheck"
   },

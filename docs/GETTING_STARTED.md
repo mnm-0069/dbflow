@@ -11,6 +11,44 @@
 
 Demo mode works without a database. Demo rows and sample SQL results are clearly labeled; **Preview demo rows** does not send the editor text anywhere.
 
+## Start the sample PostgreSQL database
+
+The repository includes a disposable PostgreSQL database with sample customers, products, orders, and order items. It is intended for local development and needs Docker Desktop or Docker Engine with the Compose plugin.
+
+1. In the project root, start the database:
+
+   ```bash
+   npm run db:up
+   ```
+
+2. Wait until `docker compose ps` reports the `postgres` service as healthy.
+3. In a second terminal, start DBFLOW with `npm run dev` and open <http://localhost:5173>.
+4. Choose **Add connection** and enter these local sample credentials:
+
+   | Field | Value |
+   | --- | --- |
+   | Engine | PostgreSQL |
+   | Host | `127.0.0.1` |
+   | Port | `5433` |
+   | Database | `dbflow_demo` |
+   | Username | `dbflow` |
+   | Password | `dbflow_local_only` |
+   | SSL | Off |
+
+5. Choose **Test connection**, then **Inspect PostgreSQL schema**. The schema canvas should show `customers`, `products`, `orders`, and `order_items`, with their key relationships.
+6. Open the SQL workspace and run this read-only query to see orders with customer names:
+
+   ```sql
+   SELECT c.full_name, o.status, o.total, o.created_at
+   FROM orders AS o
+   JOIN customers AS c ON c.id = o.customer_id
+   ORDER BY o.created_at DESC;
+   ```
+
+The sample database port can be changed with `DBFLOW_POSTGRES_PORT=5434 npm run db:up`; enter the same port in the connection form. `npm run db:stop` stops the container while preserving its data. To remove the sample database and its stored volume, run `docker compose down --volumes` from the project root; this deletes all data in that local sample database.
+
+The sample password is for this loopback-only development setup. Do not reuse it for a real database or expose the container to a network.
+
 ## Connect a live database
 
 1. Start a PostgreSQL or MySQL database that is reachable from this machine.

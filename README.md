@@ -74,6 +74,7 @@ You can explore the demo without installing or configuring a database. Live feat
 
 - Node.js **20.19 or newer**
 - npm **10 or newer**
+- Docker Desktop or Docker Engine with Compose, if you want to run the included PostgreSQL walkthrough
 
 ### Start DBFLOW
 
@@ -88,7 +89,19 @@ Then open [http://localhost:5173](http://localhost:5173). The local API health e
 
 The default ports and settings work without an environment file. To adjust the API port or allowed web origin, copy `apps/api/.env.example` to `apps/api/.env` and edit the local values.
 
-For a guided live connection workflow, see [Getting started](docs/GETTING_STARTED.md).
+### Try the live PostgreSQL workflow
+
+In another terminal, start the bundled local sample database:
+
+```bash
+npm run db:up
+```
+
+Connect in DBFLOW using host `127.0.0.1`, port `5433`, database `dbflow_demo`, username `dbflow`, password `dbflow_local_only`, and SSL off. Test the connection, inspect the schema, open a table, and try the read-only SQL workspace. The database contains linked customers, products, orders, and order items. Stop it with `npm run db:stop`.
+
+This walkthrough needs Docker Desktop or Docker Engine with the Compose plugin. Its sample database is published only on loopback and uses a development-only password. The setup guide includes a sample query, port overrides, and instructions for removing the sample data.
+
+For the complete connection walkthrough, see [Getting started](docs/GETTING_STARTED.md).
 
 ## Built with
 
