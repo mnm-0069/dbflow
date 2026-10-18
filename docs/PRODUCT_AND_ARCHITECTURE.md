@@ -17,7 +17,7 @@ PostgreSQL and MySQL connections become in-memory API sessions with a 15-minute 
 ### Live schema and records
 
 - Introspection returns visible base tables, columns, primary keys, foreign keys, generated-column metadata, and nullability where available.
-- Record pages are bounded at 100 rows and 2 MB. Search and sortable columns operate on the loaded page; they do not query across the full table.
+- Record pages are bounded at 100 rows and 2 MB. Search matches case-insensitively across visible columns in the full table; sorting is performed by the database, and paging stays server-side.
 - Row editing requires all primary-key columns and accepts scalar values only. It excludes primary-key and generated columns, uses bound values and optimistic concurrency checks, and reports a conflict if the original values no longer match.
 
 ### Supported schema changes
@@ -25,6 +25,7 @@ PostgreSQL and MySQL connections become in-memory API sessions with a 15-minute 
 - **Create table:** a limited visual definition (up to 50 columns; integer, bigint, varchar, text, boolean, timestamp, decimal; optional primary key). The API validates the target, builds dialect-specific SQL, stores a one-use session-bound plan for five minutes, and executes only after explicit confirmation. MySQL DDL may commit implicitly.
 - **Add column:** one constrained `ALTER TABLE … ADD COLUMN` with a supported type and optional nullability modifier. The API parses and normalizes this subset, verifies the target, issues a one-use session-bound preview, and runs only after confirmation.
 - After successful DDL, the frontend re-introspects the database. If refresh fails or the new object is not visible, it keeps an explicit verification notice rather than claiming the canvas is synchronized.
+- The PostgreSQL 18.6 local workflow has been exercised end to end: a reviewed table creation appeared in refreshed schema metadata, a reviewed add-column plan executed and appeared on re-introspection, and the temporary verification table was removed afterward.
 
 ### SQL execution and demo state
 
@@ -53,7 +54,7 @@ Manual query execution is read-only. Any future broader DDL support must detect 
 
 ## Next slices
 
-1. Complete data-grid workflow basics: stable server-side sorting/filtering and only then broaden record mutations beyond scalar row editing.
-2. Add focused frontend workflow tests for connection errors, DDL review, schema refresh failures, and record-edit conflicts.
-3. Add database-backed integration coverage using an explicitly isolated test database before claiming real-engine workflows verified end to end.
-4. Build guided lessons and analytics only after core live workflows remain reliable.
+1. Broaden safe record workflows beyond scalar row editing, with explicit review and clear handling for insert and delete operations.
+2. Add focused frontend workflow coverage for connection errors, DDL review, schema refresh failures, and record-edit conflicts.
+3. Add repeatable database-backed integration coverage using an explicitly isolated test database.
+4. Build guided lessons and analytics only after the core live workflows remain reliable.
